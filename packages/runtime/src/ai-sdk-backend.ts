@@ -1057,6 +1057,9 @@ export class AiSdkBackend implements AgentBackend {
   private readonly toolAvailabilityRuntime: ToolAvailabilityRuntime;
   private readonly applyPatchProfile: ApplyPatchProfile | null;
 
+  /** Bounds outstanding Code Mode cells on this backend. */
+  private readonly codeCellAdmission = new CodeCellAdmission();
+
   /**
    * Every `send()` currently in flight on this backend.
    *
@@ -1071,9 +1074,6 @@ export class AiSdkBackend implements AgentBackend {
    * teardown cleared the run identity a *different* turn's tool execution then
    * read back as absent.
    */
-  /** Bounds outstanding Code Mode cells for this session. */
-  private readonly codeCellAdmission = new CodeCellAdmission();
-
   private readonly activeTurns = new Set<TurnScope>();
   /**
    * Request-shape baseline for change attribution. Session-scoped on purpose:
