@@ -1,4 +1,3 @@
-import { join } from 'node:path';
 import {
   decodeRemoteRuntimeHostProfile,
   RUNTIME_HOST_ACCESS_CREDENTIAL_MAX_BYTES,
@@ -6,7 +5,7 @@ import {
   type RemoteRuntimeHostProfile,
   type ResolvedRuntimeHostProfile,
 } from '@maka/runtime-host/client';
-import { createFileCredentialStore } from '@maka/storage';
+import type { CredentialStore } from '@maka/storage';
 
 const PAIRING_JOURNAL_SCHEMA_VERSION = 1;
 const PAIRING_JOURNAL_CREDENTIAL_SLOT = 'runtime-host-pairing-recovery';
@@ -47,9 +46,9 @@ export function pairingIntentMatchesTarget(
 }
 
 export async function readDesktopRuntimeHostPairingIntents(
-  clientDataRoot: string,
+  credentials: Pick<CredentialStore, 'getSecret'>,
 ): Promise<readonly DesktopRuntimeHostPairingIntent[]> {
-  const contents = await pairingCredentialStore(clientDataRoot).getSecret(
+  const contents = await credentials.getSecret(
     PAIRING_JOURNAL_CREDENTIAL_SLOT,
     'runtime_host_access',
   );
@@ -65,10 +64,9 @@ export async function readDesktopRuntimeHostPairingIntents(
 }
 
 export async function writeDesktopRuntimeHostPairingIntents(
-  clientDataRoot: string,
+  credentials: Pick<CredentialStore, 'setSecret' | 'deleteSecret'>,
   intents: readonly DesktopRuntimeHostPairingIntent[],
 ): Promise<void> {
-  const credentials = pairingCredentialStore(clientDataRoot);
   if (intents.length === 0) {
     await credentials.deleteSecret(
       PAIRING_JOURNAL_CREDENTIAL_SLOT,
@@ -150,10 +148,6 @@ function requireRemoteTarget(
     profile: decodeRemoteRuntimeHostProfile(target.profile),
     credential: requireCredential(target.credential),
   };
-}
-
-function pairingCredentialStore(clientDataRoot: string) {
-  return createFileCredentialStore(join(clientDataRoot, 'runtime-host-client'));
 }
 
 function requireCredential(value: unknown): string {

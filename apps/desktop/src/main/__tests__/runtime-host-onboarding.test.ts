@@ -22,7 +22,7 @@ test('persists a verified SSH profile without projecting its credential', async 
     },
     clientInstanceId: 'stable-client',
     profiles,
-    setupPackage: { kind: 'npm', specifier: 'maka-agent@next' },
+    resolveSetupPackage: () => ({ kind: 'npm', specifier: 'maka-agent@next' }),
     runSetup: async (_input, onProgress) => {
       onProgress({ phase: 'installing_service' });
       return {
@@ -77,7 +77,7 @@ test('projects invalid setup input as a recoverable failure', async () => {
     profiles: {
       addAndEnableVerified: async () => assert.fail('not used'),
     },
-    setupPackage: { kind: 'npm', specifier: 'maka-agent@0.2.0' },
+    resolveSetupPackage: () => ({ kind: 'npm', specifier: 'maka-agent@0.2.0' }),
     runSetup: async () => assert.fail('invalid input must not start SSH'),
     send: () => undefined,
   });
@@ -131,7 +131,7 @@ test('finishes Host pairing after the cancellable SSH phase has completed', asyn
     },
     clientInstanceId: 'stable-client',
     profiles,
-    setupPackage: { kind: 'npm', specifier: 'maka-agent@0.2.0' },
+    resolveSetupPackage: () => ({ kind: 'npm', specifier: 'maka-agent@0.2.0' }),
     runSetup: async (_input, _onProgress, onComplete) => {
       onComplete();
       completeReceived = true;
@@ -157,5 +157,44 @@ test('finishes Host pairing after the cancellable SSH phase has completed', asyn
 
   finishPairing({ profileId: 'office' });
   assert.deepEqual(await setup, { kind: 'complete', profileId: 'office', revision: 3 });
+  await onboarding.close();
+});
+
+test('resolves the setup package only when onboarding starts', async () => {
+  const handlers = new Map<string, (...args: unknown[]) => unknown>();
+  let resolutions = 0;
+  const onboarding = createDesktopRuntimeHostOnboarding({
+    ipcMain: {
+      handle: (channel, handler) => handlers.set(channel, handler as (...args: unknown[]) => unknown),
+      removeHandler: (channel) => handlers.delete(channel),
+    },
+    clientInstanceId: 'stable-client',
+    profiles: {
+      addAndEnableVerified: async () => assert.fail('not used'),
+    },
+    resolveSetupPackage: () => {
+      resolutions += 1;
+      throw new Error('Desktop does not declare an exact Runtime Host setup package');
+    },
+    runSetup: async () => assert.fail('an unavailable package must not start SSH'),
+    send: () => undefined,
+  });
+
+  assert.deepEqual(await handlers.get('runtime-host-onboarding:getSnapshot')?.({}), {
+    kind: 'idle',
+    revision: 0,
+  });
+  assert.equal(resolutions, 0);
+  assert.deepEqual(
+    await handlers.get('runtime-host-onboarding:start')?.({}, {
+      destination: 'operator@example.com',
+    }),
+    {
+      kind: 'failed',
+      message: 'Desktop does not declare an exact Runtime Host setup package',
+      revision: 2,
+    },
+  );
+  assert.equal(resolutions, 1);
   await onboarding.close();
 });
